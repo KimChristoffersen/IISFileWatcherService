@@ -22,7 +22,7 @@ namespace IISFileWatcherService
         protected override void OnStart(string[] args)
         {
             _sourcePath = @"c:\TempFiles\from";
-            _destinationPaths = new[] { @"c:\TempFiles\to" };
+            _destinationPaths = new[] { @"c:\TempFiles\to", @"c:\TempFiles\to2" };
             //_sourcePath = ConfigurationManager.AppSettings["SourcePath"];
             //_destinationPaths = ConfigurationManager.AppSettings["DestinationPaths"].Split(';');
 
@@ -45,77 +45,80 @@ namespace IISFileWatcherService
         private async void OnNewFileDetected(object sender, FileSystemEventArgs e)
         {
             await Task.Delay(1000);
-            CopyFileToDestinations(e.FullPath);
+            CopyFileToDestinations();
         }
 
-        private void CopyFileToDestinations(string filePath)
+        private void CopyFileToDestinations()
         {
-            var copyFilesCount = 1;
-            var copyFilesErrorCount = 0;
-            var copyFilesRetryCount = 0;
-            var sourceFileList = GetSourceFileList();
-
-            foreach (string sourceFile in sourceFileList)
+            foreach (string destinationPath in _destinationPaths)
             {
-                var destinationFile = sourceFile.Replace(_sourcePath, _destinationPaths.First());
-                try
+                var copyFilesCount = 1;
+                var copyFilesErrorCount = 0;
+                var copyFilesRetryCount = 0;
+                var sourceFileList = GetSourceFileList();
+
+                foreach (string sourceFile in sourceFileList)
                 {
-                    var currentFileDestinationDirectory = Path.GetDirectoryName(destinationFile);
-                    if (!Directory.Exists(currentFileDestinationDirectory))
+                    var destinationFile = sourceFile.Replace(_sourcePath, destinationPath);
+                    try
                     {
-                        Directory.CreateDirectory(currentFileDestinationDirectory);
-                    }
-
-                    var bCopySuccess = false;
-                    const int CopyRetries = 3;
-                    var copyCount = 0;
-                    Exception lastException = null;
-
-                    do
-                    {
-                        try
+                        var currentFileDestinationDirectory = Path.GetDirectoryName(destinationFile);
+                        if (!Directory.Exists(currentFileDestinationDirectory))
                         {
-                            File.Copy(sourceFile, destinationFile, true);
-                            bCopySuccess = true;
+                            Directory.CreateDirectory(currentFileDestinationDirectory);
                         }
-                        catch (Exception e)
+
+                        var bCopySuccess = false;
+                        const int CopyRetries = 3;
+                        var copyCount = 0;
+                        Exception lastException = null;
+
+                        do
                         {
-                            lastException = e;
-
-                            copyCount++;
-                            copyFilesRetryCount++;
-                            Console.WriteLine(
-                                $"\t{_sourcePath}: Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. Errormessage: {e.Message}. Retry count: {copyFilesRetryCount}. Retrying...");
-
-                            if (copyCount < CopyRetries)
+                            try
                             {
-                                Thread.Sleep(copyCount * 200);
+                                File.Copy(sourceFile, destinationFile, true);
+                                bCopySuccess = true;
                             }
+                            catch (Exception e)
+                            {
+                                lastException = e;
+
+                                copyCount++;
+                                copyFilesRetryCount++;
+                                Console.WriteLine(
+                                    $"\t{_sourcePath}: Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. Errormessage: {e.Message}. Retry count: {copyFilesRetryCount}. Retrying...");
+
+                                if (copyCount < CopyRetries)
+                                {
+                                    Thread.Sleep(copyCount * 200);
+                                }
+                            }
+                        } while (bCopySuccess == false && copyCount < CopyRetries);
+
+                        if (bCopySuccess == false)
+                        {
+                            copyFilesErrorCount++;
+                            copyFilesRetryCount--;
+                            Console.WriteLine(
+                                $"\t{_sourcePath}: Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. All retries failed.");
                         }
-                    } while (bCopySuccess == false && copyCount < CopyRetries);
-
-                    if (bCopySuccess == false)
-                    {
-                        copyFilesErrorCount++;
-                        copyFilesRetryCount--;
-                        Console.WriteLine(
-                            $"\t{_sourcePath}: Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. All retries failed.");
                     }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"\t{_sourcePath}: Error copying file to: '{destinationFile}'");
-                    copyFilesErrorCount++;
-                }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"\t{_sourcePath}: Error copying file to: '{destinationFile}'");
+                        copyFilesErrorCount++;
+                    }
 
-                copyFilesCount++;
+                    copyFilesCount++;
+                }
             }
         }
 
         private List<string> GetSourceFileList()
-            {
-                return new List<string>(System.IO.Directory.GetFiles(_sourcePath, "*", SearchOption.AllDirectories));
-            }
+        {
+            return new List<string>(System.IO.Directory.GetFiles(_sourcePath, "*", SearchOption.AllDirectories));
+        }
 
 
 
