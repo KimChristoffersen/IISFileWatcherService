@@ -46,7 +46,7 @@ namespace IISFileWatcherService
 
         private string[] GetDestinationPaths()
         {
-            string filePath = @""+_sourcePath+"\\startcopy.txt";
+            string filePath = Path.Combine(_sourcePath, "startcopy.txt");
 
             try
             {
@@ -54,12 +54,16 @@ namespace IISFileWatcherService
                 {
                     throw new FileNotFoundException($"Filen {filePath} blev ikke fundet.");
                 }
+                string[] destinations = File.ReadAllText(filePath).Split(';');
 
-                return File.ReadAllText(filePath).Split(';');
+                File.Delete(filePath);
+
+                return destinations;
             }
             catch (Exception ex)
             {
-                File.AppendAllText(@"" + _sourcePath + "\\error.log", $"{DateTime.Now}: {ex.Message}\n");
+                string logFilePath = Path.Combine(_sourcePath, "error.log");
+                File.AppendAllText(logFilePath, $"{DateTime.Now}: {ex.Message}\n");
                 return new string[] { "" };
             }
         }
