@@ -14,7 +14,7 @@ namespace IISFileWatcherService
         private string[] _destinationPaths;
         private FileSystemWatcher _watcher;
         private string _logFilePath;
-
+        private string _statusLogFilePath;
 
         public FileWatcherService()
         {
@@ -24,7 +24,8 @@ namespace IISFileWatcherService
         protected override void OnStart(string[] args)
         {
             _sourcePath = @"c:\TempFiles\from";
-            _logFilePath = Path.Combine(Directory.GetParent(_sourcePath)?.FullName ?? _sourcePath, "status.log");
+            _logFilePath = Path.Combine(Directory.GetParent(_sourcePath)?.FullName ?? _sourcePath, "error.log");
+            _statusLogFilePath = Path.Combine(Directory.GetParent(_sourcePath)?.FullName ?? _sourcePath, "status.log");
 
             if (!Directory.Exists(_sourcePath))
             {
@@ -46,7 +47,7 @@ namespace IISFileWatcherService
             await Task.Delay(1000);
             _destinationPaths = GetDestinationPaths();
             CopyFileToDestinations();
-            File.AppendAllText(_logFilePath, $"{DateTime.Now}: File copy successful.\n");
+            File.AppendAllText(_statusLogFilePath, $"{DateTime.Now}: File copy successful.\n");
         }
 
         private string[] GetDestinationPaths()
@@ -112,7 +113,6 @@ namespace IISFileWatcherService
                                     break;
                                 }
 
-                                File.AppendAllText(_logFilePath, $"{DateTime.Now}: destinationfile {destinationFile} hash match sourcefile {sourceFile}'\n");
                             }
                             catch (Exception e)
                             {
