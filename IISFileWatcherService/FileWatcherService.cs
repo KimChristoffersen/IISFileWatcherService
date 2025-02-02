@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using System.ServiceProcess;
 using System.Threading;
 using System.Threading.Tasks;
@@ -103,6 +104,15 @@ namespace IISFileWatcherService
                             {
                                 File.Copy(sourceFile, destinationFile, true);
                                 bCopySuccess = true;
+
+                                if (!CompareFileHashes(sourceFile, destinationFile))
+                                {
+                                    copyFilesErrorCount++;
+                                    File.AppendAllText(_logFilePath, $"{DateTime.Now}: File hash mismatch detected for file: '{sourceFile}'\n");
+                                    break;
+                                }
+
+                                File.AppendAllText(_logFilePath, $"{DateTime.Now}: destinationfile {destinationFile} hash match sourcefile {sourceFile}'\n");
                             }
                             catch (Exception e)
                             {
@@ -136,6 +146,33 @@ namespace IISFileWatcherService
                 }
             }
         }
+
+        private string CalculateFileHash(string filePath)
+        {
+            using (var sha256 = SHA256.Create())
+            {
+                using (var fileStream = File.OpenRead(filePath))
+                {
+                    byte[] hashBytes = sha256.ComputeHash(fileStream);
+                    return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+                }
+            }
+        }
+
+        private bool CompareFileHashes(string sourceFile, string destinationFile)
+        {
+            string sourceHash = CalculateFileHash(sourceFile);
+            string destinationHash = CalculateFileHash(destinationFile);
+
+            if (sourceHash != destinationHash)
+            {
+                File.AppendAllText(_logFilePath, $"{DateTime.Now}: Hash mismatch for file '{sourceFile}' and destination '{destinationFile}'\n");
+                return false;
+            }
+
+            return true;
+        }
+
 
         private List<string> GetSourceFileList()
         {
