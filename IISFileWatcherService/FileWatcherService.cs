@@ -45,7 +45,7 @@ namespace IISFileWatcherService
             await Task.Delay(1000);
             _destinationPaths = GetDestinationPaths();
             CopyFileToDestinations();
-            File.AppendAllText(_logFilePath, $"{DateTime.Now}: Files copy success\n");
+            File.AppendAllText(_logFilePath, $"{DateTime.Now}: File copy successful.\n");
         }
 
         private string[] GetDestinationPaths()
