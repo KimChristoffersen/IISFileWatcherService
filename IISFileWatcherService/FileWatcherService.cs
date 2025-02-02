@@ -12,6 +12,8 @@ namespace IISFileWatcherService
         private string _sourcePath;
         private string[] _destinationPaths;
         private FileSystemWatcher _watcher;
+        private string _logFilePath;
+
 
         public FileWatcherService()
         {
@@ -21,6 +23,7 @@ namespace IISFileWatcherService
         protected override void OnStart(string[] args)
         {
             _sourcePath = @"c:\TempFiles\from";
+            _logFilePath = Path.Combine(Directory.GetParent(_sourcePath)?.FullName ?? _sourcePath, "status.log");
 
             if (!Directory.Exists(_sourcePath))
             {
@@ -42,6 +45,7 @@ namespace IISFileWatcherService
             await Task.Delay(1000);
             _destinationPaths = GetDestinationPaths();
             CopyFileToDestinations();
+            File.AppendAllText(_logFilePath, $"{DateTime.Now}: Files copy success\n");
         }
 
         private string[] GetDestinationPaths()
@@ -52,7 +56,7 @@ namespace IISFileWatcherService
             {
                 if (!File.Exists(filePath))
                 {
-                    throw new FileNotFoundException($"Filen {filePath} blev ikke fundet.");
+                    throw new FileNotFoundException($"Filen {filePath} blev ikke fundet\n.");
                 }
                 string[] destinations = File.ReadAllText(filePath).Split(';');
 
@@ -62,8 +66,7 @@ namespace IISFileWatcherService
             }
             catch (Exception ex)
             {
-                string logFilePath = Path.Combine(_sourcePath, "error.log");
-                File.AppendAllText(logFilePath, $"{DateTime.Now}: {ex.Message}\n");
+                File.AppendAllText(_logFilePath, $"{DateTime.Now}: {ex.Message}\n");
                 return new string[] { "" };
             }
         }
@@ -107,7 +110,7 @@ namespace IISFileWatcherService
 
                                 copyCount++;
                                 copyFilesRetryCount++;
-                                File.AppendAllText(@"" + _sourcePath + "\\error.log",$"Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. Errormessage: {e.Message}. Retry count: {copyFilesRetryCount}. Retrying...");
+                                File.AppendAllText(_logFilePath, $"Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. Errormessage: {e.Message}. Retry count: {copyFilesRetryCount}. Retrying...");
 
                                 if (copyCount < CopyRetries)
                                 {
@@ -120,12 +123,12 @@ namespace IISFileWatcherService
                         {
                             copyFilesErrorCount++;
                             copyFilesRetryCount--;
-                            File.AppendAllText(@"" + _sourcePath + "\\error.log", $"Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. All retries failed.");
+                            File.AppendAllText(_logFilePath, $"Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. All retries failed.");
                         }
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine($"\t{_sourcePath}: Error copying file to: '{destinationFile}'");
+                        File.AppendAllText(_logFilePath, $"\t{_sourcePath}: Error copying file to: '{destinationFile}'");
                         copyFilesErrorCount++;
                     }
 
