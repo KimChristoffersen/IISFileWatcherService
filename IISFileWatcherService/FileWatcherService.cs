@@ -69,7 +69,7 @@ namespace IISFileWatcherService
             catch (Exception ex)
             {
                 File.AppendAllText(_logFilePath, $"{DateTime.Now}: {ex.Message}\n");
-                return new string[] { "" };
+                return new[] { "" };
             }
         }
 
@@ -95,7 +95,7 @@ namespace IISFileWatcherService
                         }
 
                         var bCopySuccess = false;
-                        const int CopyRetries = 3;
+                        const int copyRetries = 3;
                         var copyCount = 0;
                         Exception lastException = null;
 
@@ -122,12 +122,12 @@ namespace IISFileWatcherService
                                 copyFilesRetryCount++;
                                 File.AppendAllText(_logFilePath, $"Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. Errormessage: {e.Message}. Retry count: {copyFilesRetryCount}. Retrying...");
 
-                                if (copyCount < CopyRetries)
+                                if (copyCount < copyRetries)
                                 {
                                     Thread.Sleep(copyCount * 200);
                                 }
                             }
-                        } while (bCopySuccess == false && copyCount < CopyRetries);
+                        } while (bCopySuccess == false && copyCount < copyRetries);
 
                         if (bCopySuccess == false)
                         {
@@ -173,13 +173,10 @@ namespace IISFileWatcherService
             return true;
         }
 
-
         private List<string> GetSourceFileList()
         {
-            return new List<string>(System.IO.Directory.GetFiles(_sourcePath, "*", SearchOption.AllDirectories));
+            return new List<string>(Directory.GetFiles(_sourcePath, "*", SearchOption.AllDirectories));
         }
-
-
 
         protected override void OnStop()
         {
