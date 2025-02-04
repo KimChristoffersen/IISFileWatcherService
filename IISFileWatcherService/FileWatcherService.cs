@@ -23,7 +23,8 @@ namespace IISFileWatcherService
 
         protected override void OnStart(string[] args)
         {
-            _sourcePath = @"c:\TempFiles\from";
+            _sourcePath = @"c:\TempFiles\from"; // Change this to the servers source path
+
             _logFilePath = Path.Combine(Directory.GetParent(_sourcePath)?.FullName ?? _sourcePath, "error.log");
             _statusLogFilePath = Path.Combine(Directory.GetParent(_sourcePath)?.FullName ?? _sourcePath, "status.log");
 
@@ -58,7 +59,7 @@ namespace IISFileWatcherService
             {
                 if (!File.Exists(filePath))
                 {
-                    throw new FileNotFoundException($"Filen {filePath} blev ikke fundet\n.");
+                    throw new FileNotFoundException($"The file {filePath} was not found\n.");
                 }
                 string[] destinations = File.ReadAllText(filePath).Split(';');
 
