@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Security.Cryptography;
+using System.Security.Policy;
 using System.ServiceProcess;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +18,9 @@ namespace IISFileWatcherService
         private string _logFilePath;
         private string _statusLogFilePath;
 
+        private HttpListener _listener;
+        private readonly string _url = "http://localhost:5000/";
+
         public FileWatcherService()
         {
             InitializeComponent();
@@ -23,6 +28,8 @@ namespace IISFileWatcherService
 
         protected override void OnStart(string[] args)
         {
+            StartHttpServer();
+
             _sourcePath = @"c:\TempFiles\from"; // Change this to the servers source path
 
             _logFilePath = Path.Combine(Directory.GetParent(_sourcePath)?.FullName ?? _sourcePath, "error.log");
@@ -75,7 +82,7 @@ namespace IISFileWatcherService
         }
 
 
-        private void CopyFileToDestinations()
+        private bool CopyFileToDestinations()
         {
             foreach (string destinationPath in _destinationPaths)
             {
@@ -105,7 +112,6 @@ namespace IISFileWatcherService
                             try
                             {
                                 File.Copy(sourceFile, destinationFile, true);
-                                bCopySuccess = true;
 
                                 if (!CompareFileHashes(sourceFile, destinationFile))
                                 {
@@ -113,7 +119,7 @@ namespace IISFileWatcherService
                                     File.AppendAllText(_logFilePath, $"{DateTime.Now}: File hash mismatch detected for file: '{sourceFile}'\n");
                                     break;
                                 }
-
+                                bCopySuccess = true;
                             }
                             catch (Exception e)
                             {
@@ -146,6 +152,7 @@ namespace IISFileWatcherService
                     copyFilesCount++;
                 }
             }
+            return true;
         }
 
         private string CalculateFileHash(string filePath)
@@ -179,10 +186,67 @@ namespace IISFileWatcherService
             return new List<string>(Directory.GetFiles(_sourcePath, "*", SearchOption.AllDirectories));
         }
 
+
         protected override void OnStop()
         {
             _watcher.EnableRaisingEvents = false;
             _watcher.Dispose();
+
+            if (_listener != null)
+            {
+                _listener.Stop();
+                _listener.Close();
+            }
+        }
+
+
+        private async void StartHttpServer()
+        {
+            _listener = new HttpListener();
+            _listener.Prefixes.Add(_url);
+            _listener.Start();
+
+            Task.Run(async () =>
+            {
+                while (_listener.IsListening)
+                {
+                    var context = await _listener.GetContextAsync();
+                    ProcessRequest(context);
+                }
+            });
+        }
+
+        private void ProcessRequest(HttpListenerContext context)
+        {
+            HttpListenerRequest request = context.Request;
+            HttpListenerResponse response = context.Response;
+            response.ContentType = "text/plain";
+
+            if (request.HttpMethod == "GET")
+            {
+                string responseString = "Service is running!";
+                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                response.OutputStream.Write(buffer, 0, buffer.Length);
+            }
+            else if (request.HttpMethod == "POST")
+            {
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    string requestData = reader.ReadToEnd();
+                    _destinationPaths = requestData.Split(';');
+                    CopyFileToDestinations();
+
+                    File.AppendAllText(_statusLogFilePath, $"{DateTime.Now}: Received POST: {requestData}\n");
+                }
+
+                string responseString = "POST request received!";
+                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                response.OutputStream.Write(buffer, 0, buffer.Length);
+            }
+
+            response.Close();
         }
     }
+
+
 }
