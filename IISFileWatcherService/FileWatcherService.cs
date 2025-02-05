@@ -26,7 +26,7 @@ namespace IISFileWatcherService
         {
             _sourcePath = @"c:\TempFiles\from"; // Change this to the servers source path
             
-            _logInfo = $"{DateTime.Now}: Service started ";
+            _logInfo = $"{DateTime.Now}: Service running";
 
             if (!Directory.Exists(_sourcePath))
             {
@@ -70,20 +70,18 @@ namespace IISFileWatcherService
                     string requestData = reader.ReadToEnd();
                     _destinationPaths = requestData.Split(';');
                     CopyFileToDestinations();
-
-                    _logInfo = $"{DateTime.Now}: Received POST: {requestData}";
                 }
 
                 string responseString = _logInfo;
                 byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
                 response.OutputStream.Write(buffer, 0, buffer.Length);
+                _logInfo = $"{DateTime.Now}: Service running";
             }
-
             response.Close();
         }
 
 
-        private bool CopyFileToDestinations()
+        private void CopyFileToDestinations()
         {
             foreach (string destinationPath in _destinationPaths)
             {
@@ -153,7 +151,7 @@ namespace IISFileWatcherService
                     copyFilesCount++;
                 }
             }
-            return true;
+            _logInfo = $"{DateTime.Now}: Copying files completed";
         }
 
         private string CalculateFileHash(string filePath)
