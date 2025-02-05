@@ -83,11 +83,12 @@ namespace IISFileWatcherService
 
         private void CopyFileToDestinations()
         {
+            var copyFilesCount = 1;
+            var copyFilesErrorCount = 0;
+            var copyFilesRetryCount = 0;
+
             foreach (string destinationPath in _destinationPaths)
             {
-                var copyFilesCount = 1;
-                var copyFilesErrorCount = 0;
-                var copyFilesRetryCount = 0;
                 var sourceFileList = GetSourceFileList();
 
                 foreach (string sourceFile in sourceFileList)
@@ -151,7 +152,10 @@ namespace IISFileWatcherService
                     copyFilesCount++;
                 }
             }
-            _logInfo = $"{DateTime.Now}: Copying files completed";
+            if (copyFilesErrorCount == 0)
+                _logInfo = $"{DateTime.Now}: Copying files completed successfully";
+            else
+                _logInfo = $"{DateTime.Now}: Copying files completed with errors";
         }
 
         private string CalculateFileHash(string filePath)
