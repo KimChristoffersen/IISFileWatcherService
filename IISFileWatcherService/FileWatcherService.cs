@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography;
-using System.Security.Policy;
 using System.ServiceProcess;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,10 +13,7 @@ namespace IISFileWatcherService
     {
         private string _sourcePath;
         private string[] _destinationPaths;
-        private FileSystemWatcher _watcher;
-        private string _logFilePath;
-        private string _statusLogFilePath;
-
+        private string _logInfo;
         private HttpListener _listener;
         private readonly string _url = "http://localhost:5000/";
 
@@ -28,57 +24,62 @@ namespace IISFileWatcherService
 
         protected override void OnStart(string[] args)
         {
-            StartHttpServer();
-
             _sourcePath = @"c:\TempFiles\from"; // Change this to the servers source path
-
-            _logFilePath = Path.Combine(Directory.GetParent(_sourcePath)?.FullName ?? _sourcePath, "error.log");
-            _statusLogFilePath = Path.Combine(Directory.GetParent(_sourcePath)?.FullName ?? _sourcePath, "status.log");
+            
+            _logInfo = $"{DateTime.Now}: Service started ";
 
             if (!Directory.Exists(_sourcePath))
             {
                 Directory.CreateDirectory(_sourcePath);
             }
-
-            _watcher = new FileSystemWatcher(_sourcePath)
-            {
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite,
-                Filter = "startcopy.*",
-                EnableRaisingEvents = true
-            };
-
-            _watcher.Created += OnNewFileDetected;
+            StartHttpServer();
         }
 
-        private async void OnNewFileDetected(object sender, FileSystemEventArgs e)
+        private async void StartHttpServer()
         {
-            await Task.Delay(1000);
-            _destinationPaths = GetDestinationPaths();
-            CopyFileToDestinations();
-            File.AppendAllText(_statusLogFilePath, $"{DateTime.Now}: File copy successful.\n");
-        }
+            _listener = new HttpListener();
+            _listener.Prefixes.Add(_url);
+            _listener.Start();
 
-        private string[] GetDestinationPaths()
-        {
-            string filePath = Path.Combine(_sourcePath, "startcopy.txt");
-
-            try
+            Task.Run(async () =>
             {
-                if (!File.Exists(filePath))
+                while (_listener.IsListening)
                 {
-                    throw new FileNotFoundException($"The file {filePath} was not found\n.");
+                    var context = await _listener.GetContextAsync();
+                    ProcessRequest(context);
                 }
-                string[] destinations = File.ReadAllText(filePath).Split(';');
+            });
+        }
 
-                File.Delete(filePath);
+        private void ProcessRequest(HttpListenerContext context)
+        {
+            HttpListenerRequest request = context.Request;
+            HttpListenerResponse response = context.Response;
+            response.ContentType = "text/plain";
 
-                return destinations;
-            }
-            catch (Exception ex)
+            if (request.HttpMethod == "GET")
             {
-                File.AppendAllText(_logFilePath, $"{DateTime.Now}: {ex.Message}\n");
-                return new[] { "" };
+                string responseString = _logInfo;
+                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                response.OutputStream.Write(buffer, 0, buffer.Length);
             }
+            else if (request.HttpMethod == "POST")
+            {
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    string requestData = reader.ReadToEnd();
+                    _destinationPaths = requestData.Split(';');
+                    CopyFileToDestinations();
+
+                    _logInfo = $"{DateTime.Now}: Received POST: {requestData}";
+                }
+
+                string responseString = _logInfo;
+                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                response.OutputStream.Write(buffer, 0, buffer.Length);
+            }
+
+            response.Close();
         }
 
 
@@ -116,7 +117,7 @@ namespace IISFileWatcherService
                                 if (!CompareFileHashes(sourceFile, destinationFile))
                                 {
                                     copyFilesErrorCount++;
-                                    File.AppendAllText(_logFilePath, $"{DateTime.Now}: File hash mismatch detected for file: '{sourceFile}'\n");
+                                    _logInfo = $"{DateTime.Now}: File hash mismatch detected for file: '{sourceFile}'";
                                     break;
                                 }
                                 bCopySuccess = true;
@@ -127,7 +128,7 @@ namespace IISFileWatcherService
 
                                 copyCount++;
                                 copyFilesRetryCount++;
-                                File.AppendAllText(_logFilePath, $"Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. Errormessage: {e.Message}. Retry count: {copyFilesRetryCount}. Retrying...");
+                                _logInfo = $"Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. Errormessage: {e.Message}. Retry count: {copyFilesRetryCount}. Retrying...";
 
                                 if (copyCount < copyRetries)
                                 {
@@ -140,12 +141,12 @@ namespace IISFileWatcherService
                         {
                             copyFilesErrorCount++;
                             copyFilesRetryCount--;
-                            File.AppendAllText(_logFilePath, $"Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. All retries failed.");
+                            _logInfo = $"Failed to copy file from: '{sourceFile}' to: '{destinationFile}'. All retries failed.";
                         }
                     }
                     catch (Exception e)
                     {
-                        File.AppendAllText(_logFilePath, $"\t{_sourcePath}: Error copying file to: '{destinationFile}'");
+                        _logInfo = $"\t{_sourcePath}: Error copying file to: '{destinationFile}'";
                         copyFilesErrorCount++;
                     }
 
@@ -174,7 +175,7 @@ namespace IISFileWatcherService
 
             if (sourceHash != destinationHash)
             {
-                File.AppendAllText(_logFilePath, $"{DateTime.Now}: Hash mismatch for file '{sourceFile}' and destination '{destinationFile}'\n");
+                _logInfo = $"{DateTime.Now}: Hash mismatch for file '{sourceFile}' and destination '{destinationFile}'\n";
                 return false;
             }
 
@@ -189,64 +190,12 @@ namespace IISFileWatcherService
 
         protected override void OnStop()
         {
-            _watcher.EnableRaisingEvents = false;
-            _watcher.Dispose();
-
             if (_listener != null)
             {
                 _listener.Stop();
                 _listener.Close();
             }
         }
-
-
-        private async void StartHttpServer()
-        {
-            _listener = new HttpListener();
-            _listener.Prefixes.Add(_url);
-            _listener.Start();
-
-            Task.Run(async () =>
-            {
-                while (_listener.IsListening)
-                {
-                    var context = await _listener.GetContextAsync();
-                    ProcessRequest(context);
-                }
-            });
-        }
-
-        private void ProcessRequest(HttpListenerContext context)
-        {
-            HttpListenerRequest request = context.Request;
-            HttpListenerResponse response = context.Response;
-            response.ContentType = "text/plain";
-
-            if (request.HttpMethod == "GET")
-            {
-                string responseString = "Service is running!";
-                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                response.OutputStream.Write(buffer, 0, buffer.Length);
-            }
-            else if (request.HttpMethod == "POST")
-            {
-                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
-                {
-                    string requestData = reader.ReadToEnd();
-                    _destinationPaths = requestData.Split(';');
-                    CopyFileToDestinations();
-
-                    File.AppendAllText(_statusLogFilePath, $"{DateTime.Now}: Received POST: {requestData}\n");
-                }
-
-                string responseString = "POST request received!";
-                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                response.OutputStream.Write(buffer, 0, buffer.Length);
-            }
-
-            response.Close();
-        }
     }
-
 
 }
