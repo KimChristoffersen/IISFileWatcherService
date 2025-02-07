@@ -39,7 +39,7 @@
             // 
             // serviceInstaller1
             // 
-            this.serviceInstaller1.ServiceName = "File Watcher Service";
+            this.serviceInstaller1.ServiceName = "File Watcher Service HTTPS";
             // 
             // ProjectInstaller
             // 
