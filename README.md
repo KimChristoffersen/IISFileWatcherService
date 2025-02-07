@@ -1,4 +1,5 @@
-<h1> OBS! 2 solutions - Master branch is IIS File Watcher Service - Http Listener branch is Http listener Copy Service</h1>
+<h2> OBS! 2 solutions - Master branch is IIS File Watcher Service
+    HttpListener branch is Http listener Copy Service</h2>
 
 <h2>📂 IIS File Watcher Service</h2>
 
@@ -33,6 +34,7 @@
 
 <p>🔹 This service is useful for automating file distribution across servers while ensuring data integrity.</p>
 
+</b>
 
 <h2>🌐 IIS HTTP Listener File Watcher Service</h2>
 
